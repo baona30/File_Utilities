@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Merger  &amp; Converter — a conversion bench</title>
+<style>
+  :root{
+    --ink: #12181f;
+    --ink-soft: #1a222b;
+    --ink-softer: #212b35;
+    --line: rgba(236,231,221,0.13);
+    --paper: #efeae0;
+    --paper-dim: #ded8c8;
+    --paper-text: #ece7dd;
+    --paper-text-dim: #a9b0b8;
+    --ink-text: #1a1712;
+    --ink-text-dim: #5b5648;
+    --amber: #e0a83c;
+    --amber-deep: #b9822a;
+    --teal: #4f8078;
+    --teal-deep: #35594f;
+    --rust: #c1543a;
+    --rust-deep: #8f3c28;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+    color: var(--paper-text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  a{ color: inherit; }
+  button{ font-family: inherit; }
+
+  .app{ max-width: 1180px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    display:flex; align-items:flex-end; justify-content:space-between; gap:20px;
+    padding-bottom: 22px; margin-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .brand-mark{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .brand-mark h1{
+    font-size: clamp(28px, 4vw, 40px);
+    margin:0; font-weight:800; letter-spacing:-0.02em; line-height:1;
+    color: var(--paper-text);
+  }
+  .brand-mark h1 em{
+    font-style:normal; color: var(--amber);
+  }
+  .brand-tag{
+    font-family: var(--mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase;
+    color: var(--paper-text-dim); border:1px solid var(--line); border-radius:20px;
+    padding:5px 12px; white-space:nowrap;
+  }
+  .topbar .desc{
+    font-size:14px; color: var(--paper-text-dim); max-width:340px; line-height:1.5; margin:0;
+  }
+
+  .privacy-note{
+    display:flex; gap:10px; align-items:flex-start;
+    background: var(--ink-soft); border:1px solid var(--line); border-radius:10px;
+    padding: 12px 14px; margin-bottom: 22px; font-size:13px; color: var(--paper-text-dim); line-height:1.55;
+  }
+  .privacy-note .dot{
+    flex:none; width:8px; height:8px; border-radius:50%; background: var(--teal); margin-top:5px;
+    box-shadow: 0 0 0 3px rgba(79,128,120,0.25);
+  }
+  .privacy-note strong{ color: var(--paper-text); }
+
+  /* ---------- Layout ---------- */
+  .layout{ display:grid; grid-template-columns: 230px 1fr; gap: 22px; align-items:start; }
+  @media (max-width: 860px){ .layout{ grid-template-columns: 1fr; } }
+
+  /* ---------- Rail nav ---------- */
+  .rail{ display:flex; flex-direction:column; gap:8px; position: sticky; top: 20px; }
+  @media (max-width: 860px){
+    .rail{ position:static; flex-direction:row; overflow-x:auto; padding-bottom:6px; gap:8px; }
+    .rail-item{ flex: 0 0 auto; min-width: 168px; }
+  }
+  .rail-item{
+    text-align:left; background: var(--ink-soft); border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px; cursor:pointer; color: var(--paper-text-dim);
+    display:flex; flex-direction:column; gap:4px; transition: border-color .15s, background .15s, color .15s;
+  }
+  .rail-item:hover{ border-color: rgba(224,168,60,0.35); color: var(--paper-text); }
+  .rail-item.active{
+    background: linear-gradient(180deg, var(--ink-softer), var(--ink-soft));
+    border-color: var(--amber); color: var(--paper-text);
+    box-shadow: inset 3px 0 0 var(--amber);
+  }
+  .rail-item .code{
+    font-family: var(--mono); font-size:12.5px; letter-spacing:0.03em; color: var(--amber); font-weight:600;
+  }
+  .rail-item.active .code{ color: var(--amber); }
+  .rail-item .label{ font-size:13.5px; font-weight:600; }
+
+  /* ---------- Deck (main panel) ---------- */
+  .deck{ display:flex; flex-direction:column; gap:18px; min-width:0; }
+
+  .panel{
+    background: var(--ink-soft); border:1px solid var(--line); border-radius:14px; padding:20px;
+  }
+  .panel h2{ margin:0 0 4px; font-size:18px; font-weight:750; letter-spacing:-0.01em; }
+  .panel .sub{ margin:0 0 16px; font-size:13px; color: var(--paper-text-dim); line-height:1.5; }
+
+  /* ---------- Tray / dropzone ---------- */
+  .tray{
+    border: 2px dashed rgba(236,231,221,0.22); border-radius:12px;
+    padding: 30px 18px; text-align:center; cursor:pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .tray:hover, .tray.drag{ border-color: var(--amber); background: rgba(224,168,60,0.05); }
+  .tray .icon{
+    width:40px; height:40px; margin:0 auto 10px; border-radius:50%;
+    border:1.5px solid var(--amber); display:flex; align-items:center; justify-content:center;
+    color: var(--amber); font-size:18px;
+  }
+  .tray .headline{ font-weight:700; font-size:14.5px; margin-bottom:4px; }
+  .tray .hint{ font-size:12.5px; color: var(--paper-text-dim); }
+  .tray input[type=file]{ display:none; }
+
+  /* ---------- Ticket list ---------- */
+  .tickets{ display:flex; flex-direction:column; gap:10px; margin-top:16px; }
+  .ticket{
+    position:relative; background: var(--paper); color: var(--ink-text);
+    border-radius:8px; padding:12px 18px; display:flex; align-items:center; gap:12px;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.35);
+  }
+  .ticket::before, .ticket::after{
+    content:""; position:absolute; top:50%; width:14px; height:14px; border-radius:50%;
+    background: var(--ink); transform:translateY(-50%);
+  }
+  .ticket::before{ left:-7px; } .ticket::after{ right:-7px; }
+  .ticket .jobcode{
+    font-family: var(--mono); font-size:11px; color: var(--ink-text-dim); flex:none; width:38px;
+  }
+  .ticket .thumb{
+    flex:none; width:34px; height:34px; border-radius:5px; background: var(--paper-dim);
+    display:flex; align-items:center; justify-content:center; font-size:14px; overflow:hidden;
+  }
+  .ticket .thumb img{ width:100%; height:100%; object-fit:cover; }
+  .ticket .meta{ flex:1; min-width:0; }
+  .ticket .fname{ font-weight:650; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ticket .fsize{ font-family: var(--mono); font-size:11px; color: var(--ink-text-dim); margin-top:1px; }
+  .ticket .reorder{ display:flex; flex-direction:column; gap:2px; flex:none; }
+  .ticket .reorder button{
+    border:none; background:transparent; color: var(--ink-text-dim); cursor:pointer; font-size:11px;
+    line-height:1; padding:2px 4px; border-radius:3px;
+  }
+  .ticket .reorder button:hover{ background: rgba(0,0,0,0.08); color: var(--ink-text); }
+  .stamp{
+    font-family: var(--mono); font-size:10.5px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+    border:2px solid currentColor; border-radius:4px; padding:3px 9px; transform: rotate(-6deg);
+    flex:none; white-space:nowrap;
+  }
+  .stamp.queued{ color: var(--amber-deep); }
+  .stamp.processing{ color: var(--teal-deep); animation: pulse 1.1s ease-in-out infinite; }
+  .stamp.done{ color: var(--teal-deep); background: rgba(79,128,120,0.12); }
+  .stamp.error{ color: var(--rust-deep); background: rgba(193,84,58,0.12); }
+  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.45; } }
+  .ticket .remove{
+    flex:none; border:none; background:transparent; color: var(--ink-text-dim); cursor:pointer;
+    font-size:16px; line-height:1; padding:2px 4px; border-radius:4px;
+  }
+  .ticket .remove:hover{ color: var(--rust-deep); background: rgba(193,84,58,0.1); }
+
+  /* ---------- Options ---------- */
+  .options{ display:flex; flex-wrap:wrap; gap:14px; margin-top:16px; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:170px; }
+  .field label{
+    font-family: var(--mono); font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase;
+    color: var(--paper-text-dim);
+  }
+  .field select{
+    background: var(--ink-softer); color: var(--paper-text); border:1px solid var(--line);
+    border-radius:8px; padding:9px 12px; font-size:13.5px; font-family: inherit; cursor:pointer;
+  }
+  .field select:focus, .tray:focus-visible, .run-btn:focus-visible, .rail-item:focus-visible{
+    outline: 2px solid var(--amber); outline-offset:2px;
+  }
+
+  /* ---------- Run bar ---------- */
+  .run-bar{ display:flex; align-items:center; gap:14px; margin-top:20px; flex-wrap:wrap; }
+  .run-btn{
+    background: var(--amber); color: #1a1712; border:none; border-radius:9px;
+    padding:12px 22px; font-weight:750; font-size:14px; cursor:pointer; letter-spacing:0.01em;
+    transition: transform .1s, background .15s;
+  }
+  .run-btn:hover:not(:disabled){ background:#eab54f; }
+  .run-btn:active:not(:disabled){ transform: translateY(1px); }
+  .run-btn:disabled{ background: var(--paper-dim); color: var(--ink-text-dim); cursor:not-allowed; }
+  .run-status{ font-size:12.5px; color: var(--paper-text-dim); font-family: var(--mono); }
+
+  .progress{
+    height:6px; border-radius:4px; background: var(--ink-softer); overflow:hidden; margin-top:14px;
+    display:none;
+  }
+  .progress.show{ display:block; }
+  .progress > span{ display:block; height:100%; width:0%; background: linear-gradient(90deg, var(--teal-deep), var(--teal)); transition: width .2s; }
+
+  .log{
+    margin-top:12px; background:#0c1116; border:1px solid var(--line); border-radius:8px;
+    max-height:130px; overflow-y:auto; padding:10px 12px; display:none;
+  }
+  .log.show{ display:block; }
+  .log div{ font-family: var(--mono); font-size:11px; color: #8aa39a; line-height:1.6; white-space:pre-wrap; }
+
+  /* ---------- Output ---------- */
+  .output-panel{ display:none; }
+  .output-panel.show{ display:block; }
+  .output-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .zip-btn{
+    background: transparent; border:1px solid var(--teal); color: var(--teal); border-radius:8px;
+    padding:8px 14px; font-size:12.5px; font-weight:650; cursor:pointer; font-family: var(--mono);
+  }
+  .zip-btn:hover{ background: rgba(79,128,120,0.12); }
+  .out-card{
+    display:flex; align-items:center; gap:12px; background: var(--paper); color: var(--ink-text);
+    border-radius:8px; padding:12px 16px; margin-bottom:8px;
+  }
+  .out-card .fname{ flex:1; min-width:0; font-weight:650; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .out-card .fsize{ font-family: var(--mono); font-size:11px; color: var(--ink-text-dim); }
+  .dl-link{
+    flex:none; background: var(--ink); color: var(--paper); text-decoration:none; font-size:12px;
+    font-weight:650; padding:7px 14px; border-radius:6px; font-family: var(--mono);
+  }
+  .dl-link:hover{ background:#242e38; }
+
+  .empty-note{ font-size:12.5px; color: var(--paper-text-dim); font-style: italic; margin-top: 10px; }
+  .footer-note{ margin-top: 26px; font-size:11.5px; color: var(--paper-text-dim); text-align:center; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand-mark">
+      <h1>Merger <em>&amp;</em> Converter</h1>
+      <span class="brand-tag">Conversion bench</span>
+    </div>
+    <p class="desc">Six stations for reshaping documents and footage: split, build, merge, and re-encode — all on this page.</p>
+  </div>
+
+  <div class="privacy-note">
+    <span class="dot"></span>
+    <div><strong>Nothing leaves your device.</strong> Every conversion — PDFs, images, and video — runs locally in this browser tab using WebAssembly. Large video jobs can take a while and use noticeable memory since there's no server doing the encoding.</div>
+  </div>
+
+  <div class="layout">
+    <nav class="rail" id="rail"></nav>
+
+    <div class="deck">
+      <div class="panel">
+        <h2 id="stationTitle"></h2>
+        <p class="sub" id="stationDesc"></p>
+
+        <div class="tray" id="tray" tabindex="0" role="button" aria-label="Add files">
+          <div class="icon">↑</div>
+          <div class="headline" id="trayHeadline">Drop files here, or click to browse</div>
+          <div class="hint" id="trayHint"></div>
+          <input type="file" id="fileInput" multiple>
+        </div>
+
+        <div class="tickets" id="tickets"></div>
+        <div class="empty-note" id="emptyNote" style="display:none;">Queue is empty — add files above to get started.</div>
+
+        <div class="options" id="options"></div>
+
+        <div class="run-bar">
+          <button class="run-btn" id="runBtn">Run</button>
+          <span class="run-status" id="runStatus"></span>
+        </div>
+
+        <div class="progress" id="progress"><span id="progressFill"></span></div>
+        <div class="log" id="log"></div>
+      </div>
+
+      <div class="panel output-panel" id="outputPanel">
+        <div class="output-head">
+          <h2 style="margin:0;">Output</h2>
+          <button class="zip-btn" id="zipBtn" style="display:none;">Download all (.zip)</button>
+        </div>
+        <div id="outputList"></div>
+      </div>
+
+      <p class="footer-note">Meger &amp; Converter converts PDFs with pdf.js &amp; pdf-lib, and video with a WebAssembly build of FFmpeg. Very large files may exceed what the browser tab can hold in memory.</p>
+    </div>
+  </div>
+</div>
+
+<script type="text/plain" id="ffmpegWorkerSource">
+export const MIME_TYPE_JAVASCRIPT = "text/javascript";
+export const MIME_TYPE_WASM = "application/wasm";
+export const CORE_VERSION = "0.12.9";
+export const CORE_URL = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd/ffmpeg-core.js`;
+export var FFMessageType;
+(function (FFMessageType) {
+    FFMessageType["LOAD"] = "LOAD";
+    FFMessageType["EXEC"] = "EXEC";
+    FFMessageType["FFPROBE"] = "FFPROBE";
+    FFMessageType["WRITE_FILE"] = "WRITE_FILE";
+    FFMessageType["READ_FILE"] = "READ_FILE";
+    FFMessageType["DELETE_FILE"] = "DELETE_FILE";
+    FFMessageType["RENAME"] = "RENAME";
+    FFMessageType["CREATE_DIR"] = "CREATE_DIR";
+    FFMessageType["LIST_DIR"] = "LIST_DIR";
+    FFMessageType["DELETE_DIR"] = "DELETE_DIR";
+    FFMessageType["ERROR"] = "ERROR";
+    FFMessageType["DOWNLOAD"] = "DOWNLOAD";
+    FFMessageType["PROGRESS"] = "PROGRESS";
+    FFMessageType["LOG"] = "LOG";
+    FFMessageType["MOUNT"] = "MOUNT";
+    FFMessageType["UNMOUNT"] = "UNMOUNT";
+})(FFMessageType || (FFMessageType = {}));
+
+export const ERROR_UNKNOWN_MESSAGE_TYPE = new Error("unknown message type");
+export const ERROR_NOT_LOADED = new Error("ffmpeg is not loaded, call `await ffmpeg.load()` first");
+export const ERROR_TERMINATED = new Error("called FFmpeg.terminate()");
+export const ERROR_IMPORT_FAILURE = new Error("failed to import ffmpeg-core.js");
+
+let ffmpeg;
+const load = async ({ coreURL: _coreURL, wasmURL: _wasmURL, workerURL: _workerURL, }) => {
+    const first = !ffmpeg;
+    try {
+        if (!_coreURL)
+            _coreURL = CORE_URL;
+        // when web worker type is `classic`.
+        importScripts(_coreURL);
+    }
+    catch {
+        if (!_coreURL || _coreURL === CORE_URL)
+            _coreURL = CORE_URL.replace('/umd/', '/esm/');
+        // when web worker type is `module`.
+        self.createFFmpegCore = (await import(
+        /* @vite-ignore */ _coreURL)).default;
+        if (!self.createFFmpegCore) {
+            throw ERROR_IMPORT_FAILURE;
+        }
+    }
+    const coreURL = _coreURL;
+    const wasmURL = _wasmURL ? _wasmURL : _coreURL.replace(/.js$/g, ".wasm");
+    const workerURL = _workerURL
+        ? _workerURL
+        : _coreURL.replace(/.js$/g, ".worker.js");
+    ffmpeg = await self.createFFmpegCore({
+        mainScriptUrlOrBlob: `${coreURL}#${btoa(JSON.stringify({ wasmURL, workerURL }))}`,
+    });
+    ffmpeg.setLogger((data) => self.postMessage({ type: FFMessageType.LOG, data }));
+    ffmpeg.setProgress((data) => self.postMessage({
+        type: FFMessageType.PROGRESS,
+        data,
+    }));
+    return first;
+};
+const exec = ({ args, timeout = -1 }) => {
+    ffmpeg.setTimeout(timeout);
+    ffmpeg.exec(...args);
+    const ret = ffmpeg.ret;
+    ffmpeg.reset();
+    return ret;
+};
+const ffprobe = ({ args, timeout = -1 }) => {
+    ffmpeg.setTimeout(timeout);
+    ffmpeg.ffprobe(...args);
+    const ret = ffmpeg.ret;
+    ffmpeg.reset();
+    return ret;
+};
+const writeFile = ({ path, data }) => {
+    ffmpeg.FS.writeFile(path, data);
+    return true;
+};
+const readFile = ({ path, encoding }) => ffmpeg.FS.readFile(path, { encoding });
+const deleteFile = ({ path }) => {
+    ffmpeg.FS.unlink(path);
+    return true;
+};
+const rename = ({ oldPath, newPath }) => {
+    ffmpeg.FS.rename(oldPath, newPath);
+    return true;
+};
+const createDir = ({ path }) => {
+    ffmpeg.FS.mkdir(path);
+    return true;
+};
+const listDir = ({ path }) => {
+    const names = ffmpeg.FS.readdir(path);
+    const nodes = [];
+    for (const name of names) {
+        const stat = ffmpeg.FS.stat(`${path}/${name}`);
+        const isDir = ffmpeg.FS.isDir(stat.mode);
+        nodes.push({ name, isDir });
+    }
+    return nodes;
+};
+const deleteDir = ({ path }) => {
+    ffmpeg.FS.rmdir(path);
+    return true;
+};
+const mount = ({ fsType, options, mountPoint }) => {
+    const str = fsType;
+    const fs = ffmpeg.FS.filesystems[str];
+    if (!fs)
+        return false;
+    ffmpeg.FS.mount(fs, options, mountPoint);
+    return true;
+};
+const unmount = ({ mountPoint }) => {
+    ffmpeg.FS.unmount(mountPoint);
+    return true;
+};
+self.onmessage = async ({ data: { id, type, data: _data }, }) => {
+    const trans = [];
+    let data;
+    try {
+        if (type !== FFMessageType.LOAD && !ffmpeg)
+            throw ERROR_NOT_LOADED;
+        switch (type) {
+            case FFMessageType.LOAD:
+                data = await load(_data);
+                break;
+            case FFMessageType.EXEC:
+                data = exec(_data);
+                break;
+            case FFMessageType.FFPROBE:
+                data = ffprobe(_data);
+                break;
+            case FFMessageType.WRITE_FILE:
+                data = writeFile(_data);
+                break;
+            case FFMessageType.READ_FILE:
+                data = readFile(_data);
+                break;
+            case FFMessageType.DELETE_FILE:
+                data = deleteFile(_data);
+                break;
+            case FFMessageType.RENAME:
+                data = rename(_data);
+                break;
+            case FFMessageType.CREATE_DIR:
+                data = createDir(_data);
+                break;
+            case FFMessageType.LIST_DIR:
+                data = listDir(_data);
+                break;
+            case FFMessageType.DELETE_DIR:
+                data = deleteDir(_data);
+                break;
+            case FFMessageType.MOUNT:
+                data = mount(_data);
+                break;
+            case FFMessageType.UNMOUNT:
+                data = unmount(_data);
+                break;
+            default:
+                throw ERROR_UNKNOWN_MESSAGE_TYPE;
+        }
+    }
+    catch (e) {
+        self.postMessage({
+            id,
+            type: FFMessageType.ERROR,
+            data: e.toString(),
+        });
+        return;
+    }
+    if (data instanceof Uint8Array) {
+        trans.push(data.buffer);
+    }
+    self.postMessage({ id, type, data }, trans);
+};
+</script>
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+     Library loading helpers (lazy — only fetched when a station
+     that needs them is actually used)
+     ============================================================ */
+  function loadScript(src){
+    return new Promise(function(resolve, reject){
+      if(document.querySelector('script[data-src="'+src+'"]')){ resolve(); return; }
+      var s = document.createElement('script');
+      s.src = src;
+      s.setAttribute('data-src', src);
+      s.onload = function(){ resolve(); };
+      s.onerror = function(){ reject(new Error('Failed to load ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  var pdfJsReady = null;
+  function ensurePdfJs(){
+    if(!pdfJsReady){
+      pdfJsReady = loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js').then(function(){
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
+      });
+    }
+    return pdfJsReady;
+  }
+
+  var pdfLibReady = null;
+  function ensurePdfLib(){
+    if(!pdfLibReady){
+      pdfLibReady = loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js');
+    }
+    return pdfLibReady;
+  }
+
+  var jsZipReady = null;
+  function ensureJSZip(){
+    if(!jsZipReady){
+      jsZipReady = loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    }
+    return jsZipReady;
+  }
+
+  async function toBlobURL(url, mimeType){
+    var resp = await fetch(url);
+    var buf = await resp.arrayBuffer();
+    var blob = new Blob([buf], { type: mimeType });
+    return URL.createObjectURL(blob);
+  }
+
+  var ffmpegInstance = null;
+  var ffmpegLoadingPromise = null;
+  function ensureFFmpeg(){
+    if(ffmpegInstance) return Promise.resolve(ffmpegInstance);
+    if(!ffmpegLoadingPromise){
+      ffmpegLoadingPromise = (async function(){
+        // The ESM build resolves its own worker.js relative to its own CDN
+        // URL, which avoids the webpack chunk-path problem in the UMD build
+        // (the cause of the earlier "origin null" / 404-on-local-server error).
+        var mod = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js');
+        var FFmpeg = mod.FFmpeg;
+        var inst = new FFmpeg();
+        inst.on('log', function(e){ appendLog(e.message); });
+        inst.on('progress', function(e){ updateProgress(e.progress); });
+        var coreBase = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+        var coreURL = await toBlobURL(coreBase + '/ffmpeg-core.js', 'text/javascript');
+        var wasmURL = await toBlobURL(coreBase + '/ffmpeg-core.wasm', 'application/wasm');
+        // Worker() can never load a cross-origin script (CORS doesn't apply to
+        // it, unlike fetch/import) — so the worker itself has to come from a
+        // same-origin blob built from the bundled source in the page.
+        var workerSrc = document.getElementById('ffmpegWorkerSource').textContent;
+        var classWorkerURL = URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' }));
+        await inst.load({ coreURL: coreURL, wasmURL: wasmURL, classWorkerURL: classWorkerURL });
+        ffmpegInstance = inst;
+        return inst;
+      })();
+    }
+    return ffmpegLoadingPromise;
+  }
+
+  async function fileToUint8(file){
+    var buf = await file.arrayBuffer();
+    return new Uint8Array(buf);
+  }
+
+  function getExt(name){
+    var m = /\.[a-z0-9]+$/i.exec(name || '');
+    return m ? m[0].toLowerCase() : '';
+  }
+
+  function formatBytes(bytes){
+    if(bytes < 1024) return bytes + ' B';
+    if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/(1024*1024)).toFixed(1) + ' MB';
+  }
+
+  async function safeDeleteFile(ff, name){
+    try{ await ff.deleteFile(name); }catch(e){ /* ignore */ }
+  }
+
+  /* ============================================================
+     App state
+     ============================================================ */
+  var files = [];        // { id, file, status, error }
+  var outputs = [];       // { name, blob }
+  var outputURLs = [];     // object URLs to revoke on next run
+  var nextId = 1;
+  var busy = false;
+
+  var STATIONS = {
+    pdf2img: {
+      code: 'PDF→IMG', label: 'Split to Images',
+      title: 'Split PDFs into images',
+      desc: 'Each page of every PDF you drop becomes a standalone image. Multiple pages download together as a .zip.',
+      accept: 'application/pdf,.pdf', multiple: true,
+      trayHeadline: 'Drop one or more PDFs', trayHint: 'PDF files only',
+      emptyLabel: 'Add PDFs above to get started.',
+      reorder: false, minFiles: 1,
+      optionsHtml: function(){
+        return field('format', 'Image format', [
+          ['png','PNG (lossless)'], ['jpeg','JPEG (smaller)']
+        ]) + field('scale', 'Resolution', [
+          ['1','1× (screen)'], ['2','2× (sharp)'], ['3','3× (print)']
+        ], '2');
+      },
+      run: runPdf2Img
+    },
+    img2pdf: {
+      code: 'IMG→PDF', label: 'Build a PDF',
+      title: 'Build a PDF from images',
+      desc: 'Combine images into a single PDF, one image per page, in the order shown below.',
+      accept: 'image/*', multiple: true,
+      trayHeadline: 'Drop one or more images', trayHint: 'PNG, JPG, WEBP, GIF, BMP',
+      emptyLabel: 'Add images above to get started.',
+      reorder: true, minFiles: 1,
+      optionsHtml: function(){
+        return field('pagefit', 'Page size', [
+          ['auto','Match each image'], ['a4','A4'], ['letter','US Letter']
+        ]);
+      },
+      run: runImg2Pdf
+    },
+    mergepdf: {
+      code: 'PDF+PDF', label: 'Merge PDFs',
+      title: 'Merge PDFs',
+      desc: 'Stitch multiple PDFs into one, in the order shown below.',
+      accept: 'application/pdf,.pdf', multiple: true,
+      trayHeadline: 'Drop two or more PDFs', trayHint: 'They\u2019ll be merged top to bottom',
+      emptyLabel: 'Add at least two PDFs above.',
+      reorder: true, minFiles: 2,
+      optionsHtml: function(){ return ''; },
+      run: runMergePdf
+    },
+    vid2mp4: {
+      code: 'VID→MP4', label: 'Convert to MP4',
+      title: 'Convert video to MP4',
+      desc: 'Turns MOV, AVI, MKV, WMV, FLV, WEBM and other clips into standard H.264 MP4 files.',
+      accept: 'video/*', multiple: true,
+      trayHeadline: 'Drop one or more video files', trayHint: 'Any common video format',
+      emptyLabel: 'Add videos above to get started.',
+      reorder: false, minFiles: 1,
+      optionsHtml: function(){
+        return field('quality', 'Quality', [
+          ['high','High quality'], ['balanced','Balanced'], ['small','Smaller file']
+        ], 'balanced') + field('res', 'Max height', [
+          ['original','Original'], ['1080','1080p'], ['720','720p'], ['480','480p']
+        ]);
+      },
+      run: runVid2Mp4
+    },
+    mp42vid: {
+      code: 'MP4→VID', label: 'Convert from MP4',
+      title: 'Convert MP4 to another format',
+      desc: 'Re-encode MP4 (or any video) into WebM, MOV, AVI, MKV, or an animated GIF.',
+      accept: 'video/*', multiple: true,
+      trayHeadline: 'Drop one or more MP4s', trayHint: 'Or any other video format',
+      emptyLabel: 'Add videos above to get started.',
+      reorder: false, minFiles: 1,
+      optionsHtml: function(){
+        return field('target', 'Convert to', [
+          ['webm','WebM'], ['mov','MOV'], ['avi','AVI'], ['mkv','MKV'], ['gif','Animated GIF']
+        ]);
+      },
+      run: runMp42Vid
+    },
+    mergevid: {
+      code: 'VID+VID', label: 'Merge to MP4',
+      title: 'Merge videos into one MP4',
+      desc: 'Concatenate clips — even mixed formats — into a single MP4, in the order shown below.',
+      accept: 'video/*', multiple: true,
+      trayHeadline: 'Drop two or more clips', trayHint: 'They\u2019ll play in this order',
+      emptyLabel: 'Add at least two clips above.',
+      reorder: true, minFiles: 2,
+      optionsHtml: function(){
+        return field('mres', 'Output height', [
+          ['480','480p'], ['720','720p'], ['1080','1080p']
+        ], '720');
+      },
+      run: runMergeVid
+    }
+  };
+
+  var STATION_ORDER = ['pdf2img','img2pdf','mergepdf','vid2mp4','mp42vid','mergevid'];
+  var currentStation = 'pdf2img';
+
+  function field(id, label, opts, selected){
+    var html = '<div class="field"><label for="opt-'+id+'">'+label+'</label><select id="opt-'+id+'">';
+    opts.forEach(function(o){
+      var sel = (selected ? o[0]===selected : false) ? ' selected' : '';
+      html += '<option value="'+o[0]+'"'+sel+'>'+o[1]+'</option>';
+    });
+    html += '</select></div>';
+    return html;
+  }
+
+  /* ============================================================
+     Rendering
+     ============================================================ */
+  var rail = document.getElementById('rail');
+  STATION_ORDER.forEach(function(key){
+    var st = STATIONS[key];
+    var btn = document.createElement('button');
+    btn.className = 'rail-item' + (key===currentStation ? ' active' : '');
+    btn.setAttribute('data-station', key);
+    btn.innerHTML = '<span class="code">'+st.code+'</span><span class="label">'+st.label+'</span>';
+    btn.addEventListener('click', function(){ selectStation(key); });
+    rail.appendChild(btn);
+  });
+
+  function selectStation(key){
+    if(busy) return;
+    currentStation = key;
+    files = [];
+    outputs = [];
+    revokeOutputURLs();
+    document.querySelectorAll('.rail-item').forEach(function(el){
+      el.classList.toggle('active', el.getAttribute('data-station')===key);
+    });
+    var st = STATIONS[key];
+    document.getElementById('stationTitle').textContent = st.title;
+    document.getElementById('stationDesc').textContent = st.desc;
+    document.getElementById('trayHeadline').textContent = st.trayHeadline;
+    document.getElementById('trayHint').textContent = st.trayHint;
+    document.getElementById('emptyNote').textContent = st.emptyLabel;
+    document.getElementById('fileInput').setAttribute('accept', st.accept);
+    document.getElementById('fileInput').multiple = !!st.multiple;
+    document.getElementById('options').innerHTML = st.optionsHtml();
+    document.getElementById('log').classList.remove('show');
+    document.getElementById('log').innerHTML = '';
+    document.getElementById('progress').classList.remove('show');
+    setProgressWidth(0);
+    document.getElementById('outputPanel').classList.remove('show');
+    document.getElementById('runStatus').textContent = '';
+    renderTickets();
+  }
+
+  function renderTickets(){
+    var wrap = document.getElementById('tickets');
+    wrap.innerHTML = '';
+    document.getElementById('emptyNote').style.display = files.length ? 'none' : 'block';
+    files.forEach(function(item, idx){
+      var st = STATIONS[currentStation];
+      var el = document.createElement('div');
+      el.className = 'ticket';
+      var code = '#' + String(idx+1).padStart(3,'0');
+      var stampClass = item.status, stampLabel =
+        item.status==='queued' ? 'Queued' :
+        item.status==='processing' ? 'Working' :
+        item.status==='done' ? 'Done' : 'Failed';
+      var reorderHtml = st.reorder ? (
+        '<div class="reorder">' +
+        '<button data-act="up" data-id="'+item.id+'" '+(idx===0?'disabled':'')+'>\u25B2</button>' +
+        '<button data-act="down" data-id="'+item.id+'" '+(idx===files.length-1?'disabled':'')+'>\u25BC</button>' +
+        '</div>'
+      ) : '';
+      el.innerHTML =
+        '<span class="jobcode">'+code+'</span>' +
+        '<span class="thumb">'+iconFor(item.file)+'</span>' +
+        '<span class="meta"><div class="fname" title="'+escapeHtml(item.file.name)+'">'+escapeHtml(item.file.name)+'</div>' +
+        '<div class="fsize">'+formatBytes(item.file.size)+(item.status==='error' && item.error ? ' \u2014 '+escapeHtml(item.error) : '')+'</div></span>' +
+        reorderHtml +
+        '<span class="stamp '+stampClass+'">'+stampLabel+'</span>' +
+        '<button class="remove" data-id="'+item.id+'" aria-label="Remove file">\u00D7</button>';
+      wrap.appendChild(el);
+    });
+
+    wrap.querySelectorAll('.remove').forEach(function(b){
+      b.addEventListener('click', function(){
+        if(busy) return;
+        var id = Number(b.getAttribute('data-id'));
+        files = files.filter(function(f){ return f.id!==id; });
+        renderTickets();
+      });
+    });
+    wrap.querySelectorAll('[data-act]').forEach(function(b){
+      b.addEventListener('click', function(){
+        if(busy) return;
+        var id = Number(b.getAttribute('data-id'));
+        var act = b.getAttribute('data-act');
+        var i = files.findIndex(function(f){ return f.id===id; });
+        if(i<0) return;
+        var j = act==='up' ? i-1 : i+1;
+        if(j<0 || j>=files.length) return;
+        var tmp = files[i]; files[i]=files[j]; files[j]=tmp;
+        renderTickets();
+      });
+    });
+  }
+
+  function iconFor(file){
+    if(file.type.indexOf('image/')===0){
+      return '<img src="'+URL.createObjectURL(file)+'" alt="">';
+    }
+    if(file.type==='application/pdf') return '\uD83D\uDCC4';
+    return '\uD83C\uDFAC';
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+
+  /* ============================================================
+     Tray / file input wiring
+     ============================================================ */
+  var tray = document.getElementById('tray');
+  var fileInput = document.getElementById('fileInput');
+
+  tray.addEventListener('click', function(){ if(!busy) fileInput.click(); });
+  tray.addEventListener('keydown', function(e){
+    if((e.key==='Enter' || e.key===' ') && !busy){ e.preventDefault(); fileInput.click(); }
+  });
+  fileInput.addEventListener('change', function(){
+    addFiles(fileInput.files);
+    fileInput.value = '';
+  });
+  ['dragenter','dragover'].forEach(function(evt){
+    tray.addEventListener(evt, function(e){ e.preventDefault(); if(!busy) tray.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(function(evt){
+    tray.addEventListener(evt, function(e){ e.preventDefault(); tray.classList.remove('drag'); });
+  });
+  tray.addEventListener('drop', function(e){
+    if(busy) return;
+    if(e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+
+  function addFiles(fileList){
+    var st = STATIONS[currentStation];
+    var incoming = Array.prototype.slice.call(fileList);
+    if(!st.multiple) incoming = incoming.slice(0,1);
+    incoming.forEach(function(f){
+      files.push({ id: nextId++, file: f, status: 'queued', error: null });
+    });
+    renderTickets();
+  }
+
+  /* ============================================================
+     Run / progress / log helpers
+     ============================================================ */
+  function setBusy(v){
+    busy = v;
+    document.getElementById('runBtn').disabled = v;
+    document.getElementById('runBtn').textContent = v ? 'Working\u2026' : 'Run';
+  }
+
+  function appendLog(msg){
+    var log = document.getElementById('log');
+    log.classList.add('show');
+    var line = document.createElement('div');
+    line.textContent = msg;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+    while(log.children.length > 200){ log.removeChild(log.firstChild); }
+  }
+
+  function setProgressWidth(pct){
+    document.getElementById('progressFill').style.width = pct + '%';
+  }
+  function updateProgress(ratio){
+    var pct = Math.max(0, Math.min(100, Math.round((ratio||0)*100)));
+    document.getElementById('progress').classList.add('show');
+    setProgressWidth(pct);
+  }
+
+  function revokeOutputURLs(){
+    outputURLs.forEach(function(u){ try{ URL.revokeObjectURL(u); }catch(e){} });
+    outputURLs = [];
+  }
+
+  function showOutputs(list){
+    revokeOutputURLs();
+    outputs = list;
+    var panel = document.getElementById('outputPanel');
+    var listEl = document.getElementById('outputList');
+    var zipBtn = document.getElementById('zipBtn');
+    listEl.innerHTML = '';
+    if(!list.length){ panel.classList.remove('show'); return; }
+    panel.classList.add('show');
+    list.forEach(function(item){
+      var url = URL.createObjectURL(item.blob);
+      outputURLs.push(url);
+      var card = document.createElement('div');
+      card.className = 'out-card';
+      card.innerHTML =
+        '<span class="fname" title="'+escapeHtml(item.name)+'">'+escapeHtml(item.name)+'</span>' +
+        '<span class="fsize">'+formatBytes(item.blob.size)+'</span>' +
+        '<a class="dl-link" href="'+url+'" download="'+escapeHtml(item.name)+'">Download</a>';
+      listEl.appendChild(card);
+    });
+    zipBtn.style.display = list.length>1 ? 'inline-block' : 'none';
+    panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+
+  document.getElementById('zipBtn').addEventListener('click', async function(){
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Zipping\u2026';
+    try{
+      await ensureJSZip();
+      var zip = new window.JSZip();
+      outputs.forEach(function(o){ zip.file(o.name, o.blob); });
+      var blob = await zip.generateAsync({ type:'blob' });
+      var url = URL.createObjectURL(blob);
+      outputURLs.push(url);
+      var a = document.createElement('a');
+      a.href = url; a.download = 'paper-and-reel-output.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Download all (.zip)';
+    }
+  });
+
+  document.getElementById('runBtn').addEventListener('click', async function(){
+    if(busy) return;
+    var st = STATIONS[currentStation];
+    if(files.length < st.minFiles){
+      document.getElementById('runStatus').textContent =
+        'Add at least ' + st.minFiles + ' file' + (st.minFiles>1?'s':'') + ' to continue.';
+      return;
+    }
+    document.getElementById('runStatus').textContent = '';
+    document.getElementById('log').innerHTML = '';
+    document.getElementById('log').classList.remove('show');
+    setProgressWidth(0);
+    files.forEach(function(f){ f.status='queued'; f.error=null; });
+    renderTickets();
+    setBusy(true);
+    try{
+      await st.run();
+      document.getElementById('runStatus').textContent = 'Done.';
+    }catch(err){
+      console.error(err);
+      var msg = (err && (err.message || err.toString && err.toString())) || 'unknown error (see browser console for details)';
+      document.getElementById('runStatus').textContent = 'Something went wrong: ' + msg;
+    }
+    setBusy(false);
+  });
+
+  /* ============================================================
+     Station: PDF -> Images
+     ============================================================ */
+  async function runPdf2Img(){
+    await ensurePdfJs();
+    var format = document.getElementById('opt-format').value;
+    var scale = parseFloat(document.getElementById('opt-scale').value);
+    var results = [];
+    for(var idx=0; idx<files.length; idx++){
+      var item = files[idx];
+      item.status = 'processing'; renderTickets();
+      try{
+        var buf = await item.file.arrayBuffer();
+        var pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+        var baseName = item.file.name.replace(/\.pdf$/i,'');
+        for(var p=1; p<=pdf.numPages; p++){
+          var page = await pdf.getPage(p);
+          var viewport = page.getViewport({ scale: scale });
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          var ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+          var mime = format==='png' ? 'image/png' : 'image/jpeg';
+          var blob = await new Promise(function(res){ canvas.toBlob(res, mime, 0.92); });
+          var ext = format==='png' ? 'png' : 'jpg';
+          var fname = pdf.numPages>1 ? (baseName+'-p'+String(p).padStart(2,'0')+'.'+ext) : (baseName+'.'+ext);
+          results.push({ name: fname, blob: blob });
+        }
+        item.status = 'done';
+      }catch(e){
+        item.status = 'error'; item.error = e.message;
+      }
+      renderTickets();
+    }
+    showOutputs(results);
+  }
+
+  /* ============================================================
+     Station: Images -> PDF
+     ============================================================ */
+  async function embedImage(pdfDoc, file){
+    var buf = await file.arrayBuffer();
+    if(file.type==='image/png') return pdfDoc.embedPng(buf);
+    if(file.type==='image/jpeg' || file.type==='image/jpg') return pdfDoc.embedJpg(buf);
+    // Fallback: rasterize anything else (webp, gif, bmp) to PNG via canvas.
+    var bitmap = await createImageBitmap(new Blob([buf]));
+    var canvas = document.createElement('canvas');
+    canvas.width = bitmap.width; canvas.height = bitmap.height;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+    var pngBlob = await new Promise(function(res){ canvas.toBlob(res, 'image/png'); });
+    var pngBuf = await pngBlob.arrayBuffer();
+    return pdfDoc.embedPng(pngBuf);
+  }
+
+  async function runImg2Pdf(){
+    await ensurePdfLib();
+    var PDFDocument = window.PDFLib.PDFDocument;
+    var fit = document.getElementById('opt-pagefit').value;
+    var pdfDoc = await PDFDocument.create();
+    for(var idx=0; idx<files.length; idx++){
+      var item = files[idx];
+      item.status = 'processing'; renderTickets();
+      try{
+        var img = await embedImage(pdfDoc, item.file);
+        var pageW, pageH;
+        if(fit==='a4'){ pageW=595.28; pageH=841.89; }
+        else if(fit==='letter'){ pageW=612; pageH=792; }
+        else { pageW=img.width; pageH=img.height; }
+        var page = pdfDoc.addPage([pageW, pageH]);
+        if(fit==='auto'){
+          page.drawImage(img, { x:0, y:0, width:pageW, height:pageH });
+        }else{
+          var s = Math.min(pageW/img.width, pageH/img.height);
+          var w = img.width*s, h = img.height*s;
+          page.drawImage(img, { x:(pageW-w)/2, y:(pageH-h)/2, width:w, height:h });
+        }
+        item.status = 'done';
+      }catch(e){
+        item.status = 'error'; item.error = e.message;
+      }
+      renderTickets();
+    }
+    var bytes = await pdfDoc.save();
+    showOutputs([{ name:'images-to-pdf.pdf', blob: new Blob([bytes], { type:'application/pdf' }) }]);
+  }
+
+  /* ============================================================
+     Station: Merge PDFs
+     ============================================================ */
+  async function runMergePdf(){
+    await ensurePdfLib();
+    var PDFDocument = window.PDFLib.PDFDocument;
+    var merged = await PDFDocument.create();
+    for(var idx=0; idx<files.length; idx++){
+      var item = files[idx];
+      item.status = 'processing'; renderTickets();
+      try{
+        var bytes = await item.file.arrayBuffer();
+        var src = await PDFDocument.load(bytes);
+        var pages = await merged.copyPages(src, src.getPageIndices());
+        pages.forEach(function(pg){ merged.addPage(pg); });
+        item.status = 'done';
+      }catch(e){
+        item.status = 'error'; item.error = e.message;
+      }
+      renderTickets();
+    }
+    var outBytes = await merged.save();
+    showOutputs([{ name:'merged.pdf', blob: new Blob([outBytes], { type:'application/pdf' }) }]);
+  }
+
+  /* ============================================================
+     Station: Video -> MP4
+     ============================================================ */
+  async function runVid2Mp4(){
+    var ff = await ensureFFmpeg();
+    var quality = document.getElementById('opt-quality').value;
+    var crf = quality==='high' ? '18' : quality==='small' ? '28' : '23';
+    var resOpt = document.getElementById('opt-res').value;
+    var results = [];
+    for(var idx=0; idx<files.length; idx++){
+      var item = files[idx];
+      item.status = 'processing'; renderTickets(); setProgressWidth(0);
+      var inputName = 'in_' + item.id + (getExt(item.file.name) || '.mp4');
+      var outputName = 'out_' + item.id + '.mp4';
+      try{
+        ff.writeFile(inputName, await fileToUint8(item.file));
+        var args = ['-i', inputName, '-c:v', 'libx264', '-crf', crf, '-preset', 'veryfast'];
+        if(resOpt !== 'original') args.push('-vf', 'scale=-2:'+resOpt);
+        args.push('-c:a', 'aac', '-b:a', '160k', outputName);
+        await ff.exec(args);
+        var data = await ff.readFile(outputName);
+        var outName = item.file.name.replace(/\.[^.]+$/, '') + '.mp4';
+        results.push({ name: outName, blob: new Blob([data.buffer], { type:'video/mp4' }) });
+        item.status = 'done';
+      }catch(e){
+        item.status = 'error'; item.error = e.message;
+      }
+      await safeDeleteFile(ff, inputName);
+      await safeDeleteFile(ff, outputName);
+      renderTickets();
+    }
+    showOutputs(results);
+  }
+
+  /* ============================================================
+     Station: MP4 -> other video formats
+     ============================================================ */
+  var FORMAT_MAP = {
+    webm: { ext:'webm', mime:'video/webm', args:['-c:v','libvpx-vp9','-b:v','0','-crf','32','-c:a','libopus'] },
+    mov:  { ext:'mov',  mime:'video/quicktime', args:['-c:v','libx264','-crf','20','-pix_fmt','yuv420p','-c:a','aac'] },
+    avi:  { ext:'avi',  mime:'video/x-msvideo', args:['-c:v','mpeg4','-qscale:v','5','-c:a','libmp3lame'] },
+    mkv:  { ext:'mkv',  mime:'video/x-matroska', args:['-c:v','libx264','-crf','20','-c:a','aac'] },
+    gif:  { ext:'gif',  mime:'image/gif', args:['-vf','fps=10,scale=480:-1:flags=lanczos'] }
+  };
+
+  async function runMp42Vid(){
+    var ff = await ensureFFmpeg();
+    var target = document.getElementById('opt-target').value;
+    var cfg = FORMAT_MAP[target];
+    var results = [];
+    for(var idx=0; idx<files.length; idx++){
+      var item = files[idx];
+      item.status = 'processing'; renderTickets(); setProgressWidth(0);
+      var inputName = 'in_' + item.id + (getExt(item.file.name) || '.mp4');
+      var outputName = 'out_' + item.id + '.' + cfg.ext;
+      try{
+        ff.writeFile(inputName, await fileToUint8(item.file));
+        var args = ['-i', inputName].concat(cfg.args, [outputName]);
+        await ff.exec(args);
+        var data = await ff.readFile(outputName);
+        var outName = item.file.name.replace(/\.[^.]+$/, '') + '.' + cfg.ext;
+        results.push({ name: outName, blob: new Blob([data.buffer], { type: cfg.mime }) });
+        item.status = 'done';
+      }catch(e){
+        item.status = 'error'; item.error = e.message;
+      }
+      await safeDeleteFile(ff, inputName);
+      await safeDeleteFile(ff, outputName);
+      renderTickets();
+    }
+    showOutputs(results);
+  }
+
+  /* ============================================================
+     Station: Merge videos -> MP4
+     ============================================================ */
+  async function runMergeVid(){
+    var ff = await ensureFFmpeg();
+    var resOpt = document.getElementById('opt-mres').value;
+    var segNames = [];
+    try{
+      for(var idx=0; idx<files.length; idx++){
+        var item = files[idx];
+        item.status = 'processing'; renderTickets(); setProgressWidth(0);
+        var inputName = 'm_in_' + idx + (getExt(item.file.name) || '.mp4');
+        var segName = 'seg_' + idx + '.ts';
+        ff.writeFile(inputName, await fileToUint8(item.file));
+        await ff.exec([
+          '-i', inputName,
+          '-vf', 'scale=-2:'+resOpt,
+          '-r', '30',
+          '-c:v', 'libx264', '-crf', '23', '-preset', 'veryfast',
+          '-c:a', 'aac', '-ar', '44100', '-ac', '2',
+          '-f', 'mpegts', segName
+        ]);
+        segNames.push(segName);
+        await safeDeleteFile(ff, inputName);
+        item.status = 'done'; renderTickets();
+      }
+      var concatArg = 'concat:' + segNames.join('|');
+      await ff.exec(['-i', concatArg, '-c', 'copy', 'merged.mp4']);
+      var data = await ff.readFile('merged.mp4');
+      showOutputs([{ name:'merged.mp4', blob: new Blob([data.buffer], { type:'video/mp4' }) }]);
+      for(var i=0;i<segNames.length;i++) await safeDeleteFile(ff, segNames[i]);
+      await safeDeleteFile(ff, 'merged.mp4');
+    }catch(e){
+      files.forEach(function(f){ if(f.status==='processing'){ f.status='error'; f.error=e.message; } });
+      renderTickets();
+      throw e;
+    }
+  }
+
+  /* ============================================================
+     Init
+     ============================================================ */
+  selectStation(currentStation);
+})();
+</script>
+</body>
+</html>
